@@ -62,25 +62,22 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             }
 
             var accountResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
-            var userId = accountResult?.Data?.UserId
-                         ?? accountResult?.Data?.Id
-                         ?? accountResult?.UserId
-                         ?? accountResult?.Id;
+            var userId = accountResult?.Data?.User?.Id?.ToString();
             var user = accountResult?.Data?.User;
             if (string.IsNullOrEmpty(userId))
             {
                 _logger.LogWarning("userId could not be extracted from AccountServiceProvider response");
             }
 
-            var tokenResult = await _tokenServiceClient.RequestTokenAsync( userId, formDto.Email);
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email);
 
             return new SignUpResult
             {
                 Succeeded = true,
                 Message = "Account created successfully",
                 UserId = userId,
-                AccessToken = tokenResult.AccessToken,
-                User = user
+                User = user,
+                AccessToken = tokenResult.AccessToken
             };
         }
         catch (Exception ex)
@@ -119,10 +116,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             }
 
             var validateResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
-            var userId = validateResult?.Data?.UserId
-                         ?? validateResult?.Data?.Id
-                         ?? validateResult?.UserId
-                         ?? validateResult?.Id;
+            var userId = validateResult?.Data?.User?.Id?.ToString();
             var user = validateResult?.Data?.User;
             if (string.IsNullOrEmpty(userId))
             {
@@ -136,8 +130,8 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
                 Succeeded = true,
                 Message = "Login successful",
                 UserId = userId,
-                AccessToken = tokenResult.AccessToken,
-                User = user
+                User = user,
+                AccessToken = tokenResult.AccessToken
             };
         }
         catch (Exception ex)
@@ -153,15 +147,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
 
     public Task<bool> SignOutAsync(string userId)
     {
-        try
-        {
-            _logger.LogInformation("User {UserId} signed out at {Time}", userId, DateTime.UtcNow);
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in SignOutAsync");
-            return Task.FromResult(false);
-        }
+        _logger.LogInformation("User {UserId} signed out at {Time}", userId, DateTime.UtcNow);
+        return Task.FromResult(true);
     }
 }

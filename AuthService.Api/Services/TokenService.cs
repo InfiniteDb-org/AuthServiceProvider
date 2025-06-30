@@ -18,10 +18,8 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
     {
         try
         {
-            var content = new StringContent(
-                JsonConvert.SerializeObject(new { userId, email, role }),
-                Encoding.UTF8,
-                "application/json");
+            var payload = JsonConvert.SerializeObject(new { userId, email, role });
+            var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
             // --- FIX: Add x-functions-key header if present ---
             var request = new HttpRequestMessage(HttpMethod.Post, $"{configuration["Providers:TokenServiceProvider"]}/api/GenerateToken")

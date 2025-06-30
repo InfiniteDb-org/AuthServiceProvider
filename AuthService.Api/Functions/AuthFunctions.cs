@@ -74,7 +74,7 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             // Strongly typed deserialization instead of dynamic
             var accountResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
             _logger.LogInformation("Deserialized AccountServiceResult: {@AccountResult}", accountResult);
-            var userId = accountResult?.Data?.UserId ?? accountResult?.Data?.Id ?? accountResult?.UserId ?? accountResult?.Id;
+            var userId = accountResult?.Data?.User?.Id?.ToString();
             if (string.IsNullOrEmpty(userId))
                 return ActionResultHelper.BadRequest("userId could not be extracted");
             
