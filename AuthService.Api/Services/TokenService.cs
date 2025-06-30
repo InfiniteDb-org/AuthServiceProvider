@@ -23,9 +23,17 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
                 Encoding.UTF8,
                 "application/json");
 
-            var response = await httpClient.PostAsync(
-                $"{configuration["Providers:TokenServiceProvider"]}/api/GenerateToken", 
-                content);
+            // --- FIX: Add x-functions-key header if present ---
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{configuration["Providers:TokenServiceProvider"]}/api/GenerateToken")
+            {
+                Content = content
+            };
+            var tokenKey = configuration["Providers:TokenServiceProviderKey"];
+            if (!string.IsNullOrEmpty(tokenKey))
+            {
+                request.Headers.Add("x-functions-key", tokenKey);
+            }
+            var response = await httpClient.SendAsync(request);
                 
             if (!response.IsSuccessStatusCode)
             {

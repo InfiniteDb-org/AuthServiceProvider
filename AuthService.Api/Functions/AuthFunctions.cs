@@ -55,7 +55,16 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             var accountServiceUrl = _configuration["Providers:AccountServiceProvider"];
             var accountJson = JsonConvert.SerializeObject(formData);
             var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
-            var accountResponse = await _httpClient.PostAsync($"{accountServiceUrl}/api/accounts/complete-registration", accountContent);
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{accountServiceUrl}/api/accounts/complete-registration")
+            {
+                Content = accountContent
+            };
+            var accountKey = _configuration["Providers:AccountServiceProviderKey"];
+            if (!string.IsNullOrEmpty(accountKey))
+            {
+                request.Headers.Add("x-functions-key", accountKey);
+            }
+            var accountResponse = await _httpClient.SendAsync(request);
 
             var responseContent = await accountResponse.Content.ReadAsStringAsync();
             _logger.LogInformation("AccountServiceProvider response: {ResponseContent}", responseContent);
