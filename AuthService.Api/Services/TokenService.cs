@@ -9,12 +9,12 @@ namespace AuthService.Api.Services;
 
 public interface ITokenServiceClient
 {
-    Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string userId, string email, string role = "User");
+    Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string? userId, string email, string role = "User");
 }
 
 public class TokenServiceClient(HttpClient httpClient, IConfiguration configuration, ILogger<TokenServiceClient> logger) : ITokenServiceClient
 {
-    public async Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string userId, string email, string role = "User")
+    public async Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string? userId, string email, string role = "User")
     {
         try
         {
@@ -34,7 +34,7 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
-            var tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(responseJson);
+            var tokenResponse = JsonConvert.DeserializeObject<TokenResult>(responseJson);
             return (tokenResponse?.Succeeded ?? false, tokenResponse?.AccessToken);
         }
         catch (Exception ex)

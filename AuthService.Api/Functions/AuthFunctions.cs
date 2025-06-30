@@ -1,18 +1,25 @@
+using System.Text;
 using AuthService.Api.DTOs;
 using AuthService.Api.Services;
 using AuthService.Api.Helpers;
 using AuthService.Api.Models.Requests;
+using AuthService.Api.Models.Responses;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 
 namespace AuthService.Api.Functions;
 
-public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authService)
+public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authService, IConfiguration configuration, HttpClient httpClient, ITokenServiceClient tokenServiceClient)
 {
     private readonly ILogger<AuthFunctions> _logger = logger;
     private readonly IAuthService _authService = authService;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly ITokenServiceClient _tokenServiceClient = tokenServiceClient;
 
     [Function("SignUp")]
     public async Task<IActionResult> SignUp(
@@ -33,6 +40,66 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             return ActionResultHelper.BadRequest("Internal server error");
         }
     }
+    
+    [Function("CompleteRegistration")]
+    public async Task<IActionResult> CompleteRegistration(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/complete-registration")] HttpRequest req)
+    {
+        try
+        {
+            var (succeeded, formData, message) = await RequestBodyHelper.ReadAndValidateRequestBody<CompleteRegistrationFormDto>(req, _logger);
+            if (!succeeded)
+                return ActionResultHelper.BadRequest(message);
+            
+            // call AccountServiceProvider
+            var accountServiceUrl = _configuration["Providers:AccountServiceProvider"];
+            var accountJson = JsonConvert.SerializeObject(formData);
+            var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
+            var accountResponse = await _httpClient.PostAsync($"{accountServiceUrl}/api/accounts/complete-registration", accountContent);
+
+            var responseContent = await accountResponse.Content.ReadAsStringAsync();
+            _logger.LogInformation("AccountServiceProvider response: {ResponseContent}", responseContent);
+            if (!accountResponse.IsSuccessStatusCode)
+                return ActionResultHelper.BadRequest("Failed to complete registration: " + responseContent);
+
+            // Strongly typed deserialization instead of dynamic
+            var accountResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
+            _logger.LogInformation("Deserialized AccountServiceResult: {@AccountResult}", accountResult);
+            var userId = accountResult?.Data?.UserId ?? accountResult?.Data?.Id ?? accountResult?.UserId ?? accountResult?.Id;
+            if (string.IsNullOrEmpty(userId))
+                return ActionResultHelper.BadRequest("userId could not be extracted");
+            
+            // Generate JWT-token in AuthService
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formData.Email);
+            _logger.LogInformation("Generated accessToken: {AccessToken}", tokenResult.AccessToken);
+
+            // Return error if token generation failed
+            if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
+            {
+                _logger.LogError("Token generation failed for userId: {UserId}", userId);
+                return ActionResultHelper.BadRequest("Internal server error: Could not generate access token.");
+            }
+            
+            // Log user object for debugging
+            _logger.LogInformation("User object: {@User}", accountResult?.Data?.User);
+            
+            // Return a root object with accessToken and user
+            return ActionResultHelper.Ok(new
+            {
+                succeeded = true,
+                message = "Registration complete.",
+                userId = userId,
+                accessToken = tokenResult.AccessToken,
+                user = accountResult?.Data?.User
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in CompleteRegistration function");
+            return ActionResultHelper.BadRequest("Internal server error");
+        }
+    }
+    
 
     [Function("SignIn")]
     public async Task<IActionResult> SignIn(
@@ -64,7 +131,7 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
                 return new UnauthorizedResult();
 
-            var (succeeded, data, message) = await RequestBodyHelper.ReadAndValidateRequestBody<SignOutRequest>(req, _logger);
+            var (succeeded, data, _) = await RequestBodyHelper.ReadAndValidateRequestBody<SignOutRequest>(req, _logger);
             if (!succeeded || string.IsNullOrEmpty(data?.UserId))
                 return ActionResultHelper.BadRequest("UserId is required");
 

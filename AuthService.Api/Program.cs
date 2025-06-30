@@ -1,8 +1,11 @@
+
+using AuthService.Api.Services;
+using AuthServiceClass = AuthService.Api.Services.AuthService;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using AuthService.Api.Services;
+
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -15,6 +18,7 @@ builder.Services
 // Register services
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ITokenServiceClient, TokenServiceClient>();
-builder.Services.AddSingleton<IAuthService, AuthService.Api.Services.AuthService>();
+builder.Services.AddSingleton<IAuthService, AuthServiceClass>();
+
 
 builder.Build().Run();
