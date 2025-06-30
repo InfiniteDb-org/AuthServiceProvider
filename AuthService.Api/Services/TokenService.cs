@@ -1,6 +1,7 @@
 using System.Text;
 using AuthService.Api.Models;
 using AuthService.Api.Models.Responses;
+using AuthService.Api.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -20,22 +21,24 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
         {
             var payload = JsonConvert.SerializeObject(new { userId, email, role });
             var content = new StringContent(payload, Encoding.UTF8, "application/json");
+            
+            var request = FunctionKeyHelper.CreateRequestWithKey(
+                configuration,
+                HttpMethod.Post,
+                $"{configuration["Providers:TokenServiceProvider"]}/api/GenerateToken",
+                content,
+                configuration["Providers:TokenServiceProviderKey"] 
+            );
 
-            // --- FIX: Add x-functions-key header if present ---
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{configuration["Providers:TokenServiceProvider"]}/api/GenerateToken")
-            {
-                Content = content
-            };
-            var tokenKey = configuration["Providers:TokenServiceProviderKey"];
-            if (!string.IsNullOrEmpty(tokenKey))
-            {
-                request.Headers.Add("x-functions-key", tokenKey);
-            }
+            foreach (var header in request.Headers)
+                logger.LogInformation($"TokenServiceClient HEADER: {header.Key} = {string.Join(",", header.Value)}");
             var response = await httpClient.SendAsync(request);
+            var responseBody = await response.Content.ReadAsStringAsync();
+            logger.LogInformation($"TokenServiceProvider response: {responseBody}");
                 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogError("Token generation failed: {ErrorContent}", await response.Content.ReadAsStringAsync());
+                logger.LogError("Token generation failed: {ErrorContent}", responseBody);
                 return (false, null);
             }
 

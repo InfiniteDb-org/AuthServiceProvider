@@ -1,10 +1,10 @@
 using System.Text;
 using AuthService.Api.DTOs;
 using AuthService.Api.Models.Responses;
+using AuthService.Api.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-
 
 namespace AuthService.Api.Services;
 
@@ -22,21 +22,6 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
     private readonly ILogger<AuthService> _logger = logger;
     private readonly ITokenServiceClient _tokenServiceClient = tokenServiceClient;
 
-    // Helper to add x-functions-key if present
-    private HttpRequestMessage CreateRequestWithKey(HttpMethod method, string url, HttpContent? content = null)
-    {
-        var request = new HttpRequestMessage(method, url)
-        {
-            Content = content
-        };
-        var accountKey = _configuration["Providers:AccountServiceProviderKey"];
-        if (!string.IsNullOrEmpty(accountKey))
-        {
-            request.Headers.Add("x-functions-key", accountKey);
-        }
-        return request;
-    }
-
     public async Task<SignUpResult> SignUpAsync(SignUpFormDto formDto)
     {
         try
@@ -45,7 +30,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             var createAccountRequest = new { formDto.Email };
             var accountJson = JsonConvert.SerializeObject(createAccountRequest);
             var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
-            var request = CreateRequestWithKey(HttpMethod.Post, $"{accountServiceUrl}/api/accounts", accountContent);
+            var request = FunctionKeyHelper.CreateRequestWithKey(_configuration, HttpMethod.Post, $"{accountServiceUrl}/api/accounts", accountContent);
             var accountResponse = await _httpClient.SendAsync(request);
 
             var responseContent = await accountResponse.Content.ReadAsStringAsync();
@@ -75,7 +60,6 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             {
                 Succeeded = true,
                 Message = "Account created successfully",
-                UserId = userId,
                 User = user,
                 AccessToken = tokenResult.AccessToken
             };
@@ -99,7 +83,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             var validateRequest = new { formDto.Email, formDto.Password };
             var validateJson = JsonConvert.SerializeObject(validateRequest);
             var validateContent = new StringContent(validateJson, Encoding.UTF8, "application/json");
-            var request = CreateRequestWithKey(HttpMethod.Post, $"{accountServiceUrl}/api/accounts/validate", validateContent);
+            var request = FunctionKeyHelper.CreateRequestWithKey(_configuration, HttpMethod.Post, $"{accountServiceUrl}/api/accounts/validate", validateContent);
             var validateResponse = await _httpClient.SendAsync(request);
 
             var responseContent = await validateResponse.Content.ReadAsStringAsync();
@@ -129,7 +113,6 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             {
                 Succeeded = true,
                 Message = "Login successful",
-                UserId = userId,
                 User = user,
                 AccessToken = tokenResult.AccessToken
             };
