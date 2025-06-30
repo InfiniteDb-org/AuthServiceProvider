@@ -50,57 +50,20 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             var (succeeded, formData, message) = await RequestBodyHelper.ReadAndValidateRequestBody<CompleteRegistrationFormDto>(req, _logger);
             if (!succeeded)
                 return ActionResultHelper.BadRequest(message);
-            
-            // call AccountServiceProvider
-            var accountServiceUrl = _configuration["Providers:AccountServiceProvider"];
-            var accountJson = JsonConvert.SerializeObject(formData);
-            var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{accountServiceUrl}/api/accounts/complete-registration")
-            {
-                Content = accountContent
-            };
-            var accountKey = _configuration["Providers:AccountServiceProviderKey"];
-            if (!string.IsNullOrEmpty(accountKey))
-            {
-                request.Headers.Add("x-functions-key", accountKey);
-            }
-            var accountResponse = await _httpClient.SendAsync(request);
 
-            var responseContent = await accountResponse.Content.ReadAsStringAsync();
-            _logger.LogInformation("AccountServiceProvider response: {ResponseContent}", responseContent);
-            if (!accountResponse.IsSuccessStatusCode)
-                return ActionResultHelper.BadRequest("Failed to complete registration: " + responseContent);
+            var (accountResult, error) = await CompleteRegistrationHelper.CompleteAccountRegistrationAsync(formData, _configuration, _httpClient);
+            if (accountResult == null)
+                return ActionResultHelper.BadRequest(error);
 
-            // Strongly typed deserialization instead of dynamic
-            var accountResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
-            _logger.LogInformation("Deserialized AccountServiceResult: {@AccountResult}", accountResult);
-            var userId = accountResult?.Data?.User?.Id?.ToString();
+            var userId = accountResult.Data?.User?.Id?.ToString();
             if (string.IsNullOrEmpty(userId))
                 return ActionResultHelper.BadRequest("userId could not be extracted");
-            
-            // Generate JWT-token in AuthService
-            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formData.Email);
-            _logger.LogInformation("Generated accessToken: {AccessToken}", tokenResult.AccessToken);
 
-            // Return error if token generation failed
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formData.Email);
             if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
-            {
-                _logger.LogError("Token generation failed for userId: {UserId}", userId);
                 return ActionResultHelper.BadRequest("Internal server error: Could not generate access token.");
-            }
-            
-            // Log user object for debugging
-            _logger.LogInformation("User object: {@User}", accountResult?.Data?.User);
-            
-            // Return a root object with accessToken and user
-            return ActionResultHelper.Ok(new
-            {
-                succeeded = true,
-                message = "Registration complete.",
-                userId = userId,
-                accessToken = tokenResult.AccessToken,
-                user = accountResult?.Data?.User
-            });
+
+            return ActionResultHelper.Ok(new { succeeded = true, message = "Registration complete.", accessToken = tokenResult.AccessToken, user = accountResult.Data?.User });
         }
         catch (Exception ex)
         {
