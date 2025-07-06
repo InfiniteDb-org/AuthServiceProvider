@@ -6,12 +6,8 @@ namespace AuthService.Api.Helpers;
 public static class FunctionKeyHelper
 {
     // Helper to add x-functions-key if present, now supports explicit key
-    public static HttpRequestMessage CreateRequestWithKey(
-        IConfiguration configuration,
-        HttpMethod method,
-        string url,
-        HttpContent? content = null,
-        string? key = null)
+    public static HttpRequestMessage CreateRequestWithKey( 
+        IConfiguration configuration, HttpMethod method, string url, HttpContent? content = null, string? key = null)
     {
         var request = new HttpRequestMessage(method, url)
         {

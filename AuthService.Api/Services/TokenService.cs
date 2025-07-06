@@ -10,12 +10,12 @@ namespace AuthService.Api.Services;
 
 public interface ITokenServiceClient
 {
-    Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string? userId, string email, string role = "User");
+    Task<TokenResult> RequestTokenAsync(string? userId, string email, string role = "User");
 }
 
 public class TokenServiceClient(HttpClient httpClient, IConfiguration configuration, ILogger<TokenServiceClient> logger) : ITokenServiceClient
 {
-    public async Task<(bool Succeeded, string? AccessToken)> RequestTokenAsync(string? userId, string email, string role = "User")
+    public async Task<TokenResult> RequestTokenAsync(string? userId, string email, string role = "User")
     {
         try
         {
@@ -39,17 +39,16 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogError("Token generation failed: {ErrorContent}", responseBody);
-                return (false, null);
+                return new TokenResult { Succeeded = false, AccessToken = null, RefreshToken = null, Message = responseBody };
             }
-
-            var responseJson = await response.Content.ReadAsStringAsync();
-            var tokenResponse = JsonConvert.DeserializeObject<TokenResult>(responseJson);
-            return (tokenResponse?.Succeeded ?? false, tokenResponse?.AccessToken);
+            
+            var tokenResponse = JsonConvert.DeserializeObject<TokenResult>(responseBody);
+            return tokenResponse ?? new TokenResult { Succeeded = false, RefreshToken = null, Message = "Deserialization failed" };
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error requesting token: {Message}", ex.Message);
-            return (false, null);
+            return new TokenResult { Succeeded = false, AccessToken = null, RefreshToken = null, Message = ex.Message };
         }
     }
 }

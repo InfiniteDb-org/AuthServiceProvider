@@ -8,5 +8,6 @@ public class SignUpResult
     public string? Message { get; set; }
     public string? UserId { get; set; }
     public string? AccessToken { get; set; }
+    public string? RefreshToken { get; set; }
     public UserAccountDto? User { get; set; }
 }

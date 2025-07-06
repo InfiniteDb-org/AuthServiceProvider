@@ -1,4 +1,3 @@
-using System.Text;
 using AuthService.Api.DTOs;
 using AuthService.Api.Models.Responses;
 using AuthService.Api.Helpers;
@@ -28,50 +27,24 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
         {
             var accountServiceUrl = _configuration["Providers:AccountServiceProvider"];
             var createAccountRequest = new { formDto.Email };
-            var accountJson = JsonConvert.SerializeObject(createAccountRequest);
-            var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
-            var request = FunctionKeyHelper.CreateRequestWithKey(_configuration, HttpMethod.Post, $"{accountServiceUrl}/api/accounts", accountContent);
-            var accountResponse = await _httpClient.SendAsync(request);
-
-            var responseContent = await accountResponse.Content.ReadAsStringAsync();
-            _logger.LogInformation("AccountServiceProvider response: {AccountContent}", responseContent);
-
-            if (!accountResponse.IsSuccessStatusCode)
-            {
-                _logger.LogError("Account creation failed: {ErrorContent}", responseContent);
-                return new SignUpResult
-                {
-                    Succeeded = false,
-                    Message = $"Account creation failed: {accountResponse.StatusCode}"
-                };
-            }
-
-            var accountResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
-            var userId = accountResult?.Data?.User?.Id?.ToString();
-            var user = accountResult?.Data?.User;
+            var accountResult = await HttpJsonHelper.PostJsonAsync<AccountServiceResult>(
+                _httpClient, _configuration, $"{accountServiceUrl}/api/accounts", createAccountRequest);
+            var userId = accountResult.Data?.User?.Id?.ToString();
+            var user = accountResult.Data?.User;
             if (string.IsNullOrEmpty(userId))
             {
                 _logger.LogWarning("userId could not be extracted from AccountServiceProvider response");
             }
-
-            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email);
-
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email, user?.Role ?? "User");
             return new SignUpResult
             {
-                Succeeded = true,
-                Message = "Account created successfully",
-                User = user,
-                AccessToken = tokenResult.AccessToken
+                Succeeded = true, Message = "Account created successfully", User = user, AccessToken = tokenResult.AccessToken, RefreshToken = tokenResult.RefreshToken
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in SignUpAsync");
-            return new SignUpResult
-            {
-                Succeeded = false,
-                Message = $"Error: {ex.Message}"
-            };
+            return new SignUpResult { Succeeded = false, Message = $"Error: {ex.Message}" };
         }
     }
 
@@ -81,50 +54,38 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
         {
             var accountServiceUrl = _configuration["Providers:AccountServiceProvider"];
             var validateRequest = new { formDto.Email, formDto.Password };
-            var validateJson = JsonConvert.SerializeObject(validateRequest);
-            var validateContent = new StringContent(validateJson, Encoding.UTF8, "application/json");
-            var request = FunctionKeyHelper.CreateRequestWithKey(_configuration, HttpMethod.Post, $"{accountServiceUrl}/api/accounts/validate", validateContent);
-            var validateResponse = await _httpClient.SendAsync(request);
+            var accountResult = await HttpJsonHelper.PostJsonAsync<dynamic>(
+                _httpClient, _configuration, $"{accountServiceUrl}/api/accounts/validate", validateRequest);
 
-            var responseContent = await validateResponse.Content.ReadAsStringAsync();
-            _logger.LogInformation("AccountServiceProvider validate response: {AccountContent}", responseContent);
-
-            if (!validateResponse.IsSuccessStatusCode)
-            {
-                _logger.LogError("Credential validation failed: {ErrorContent}", responseContent);
-                return new SignInResult
-                {
-                    Succeeded = false,
-                    Message = "Invalid credentials"
-                };
-            }
-
-            var validateResult = JsonConvert.DeserializeObject<AccountServiceResult>(responseContent);
-            var userId = validateResult?.Data?.User?.Id?.ToString();
-            var user = validateResult?.Data?.User;
+            // log answer for debugging
+            object asObj = accountResult;
+            _logger.LogWarning("AccountService validate response: {AccountResult}", JsonConvert.SerializeObject(asObj));
+            var user = accountResult.data?.user != null ? JsonConvert.DeserializeObject<UserAccountDto>(accountResult.data.user.ToString()) : null;
+            var userId = user?.Id?.ToString();
             if (string.IsNullOrEmpty(userId))
             {
-                _logger.LogWarning("userId could not be extracted from AccountServiceProvider validate response");
+                return new SignInResult
+                {
+                    Succeeded = false, Message = "userId could not be extracted", AccessToken = null, RefreshToken = null
+                };
             }
-
-            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email);
-
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email, user?.Role ?? "User");
+            if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
+            {
+                return new SignInResult
+                {
+                    Succeeded = false, Message = "Failed to sign in", AccessToken = null, RefreshToken = null
+                };
+            }
             return new SignInResult
             {
-                Succeeded = true,
-                Message = "Login successful",
-                User = user,
-                AccessToken = tokenResult.AccessToken
+                Succeeded = true, Message = "Login successful", User = user, AccessToken = tokenResult.AccessToken, RefreshToken = tokenResult.RefreshToken
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in SignInAsync");
-            return new SignInResult
-            {
-                Succeeded = false,
-                Message = $"Error: {ex.Message}"
-            };
+            return new SignInResult { Succeeded = false, Message = $"Error: {ex.Message}", AccessToken = null, RefreshToken = null };
         }
     }
 
