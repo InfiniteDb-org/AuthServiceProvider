@@ -1,15 +1,12 @@
-using System.Text;
 using AuthService.Api.DTOs;
 using AuthService.Api.Services;
 using AuthService.Api.Helpers;
 using AuthService.Api.Models.Requests;
-using AuthService.Api.Models.Responses;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
 
 namespace AuthService.Api.Functions;
 
@@ -129,7 +126,13 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
                 return ActionResultHelper.BadRequest("Internal server error: Could not generate access token.");
 
-            return ActionResultHelper.Ok(new { succeeded = true, message = "Registration complete.", accessToken = tokenResult.AccessToken, user = accountResult.Data?.User });
+            return ActionResultHelper.Ok(new { 
+                succeeded = true, 
+                message = "Registration complete.", 
+                accessToken = tokenResult.AccessToken, 
+                refreshToken = tokenResult.RefreshToken, 
+                user = accountResult.Data?.User 
+            });
         }
         catch (Exception ex)
         {
@@ -137,9 +140,7 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
             return ActionResultHelper.BadRequest("Internal server error");
         }
     }
-
     
-    // 
     [Function("GetAccountById")]
     public async Task<IActionResult> GetAccountById(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auth/account/{userId}")] HttpRequest req, string userId)
