@@ -56,7 +56,11 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
             var validateRequest = new { formDto.Email, formDto.Password };
             var accountResult = await HttpJsonHelper.PostJsonAsync<dynamic>(
                 _httpClient, _configuration, $"{accountServiceUrl}/api/accounts/validate", validateRequest);
-            var user = accountResult.Data?.User != null ? JsonConvert.DeserializeObject<UserAccountDto>(accountResult.Data.User.ToString()) : null;
+
+            // log answer for debugging
+            object asObj = accountResult;
+            _logger.LogWarning("AccountService validate response: {AccountResult}", JsonConvert.SerializeObject(asObj));
+            var user = accountResult.data?.user != null ? JsonConvert.DeserializeObject<UserAccountDto>(accountResult.data.user.ToString()) : null;
             var userId = user?.Id?.ToString();
             if (string.IsNullOrEmpty(userId))
             {
