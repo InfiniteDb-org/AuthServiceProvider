@@ -6,6 +6,7 @@ namespace AuthService.Api.Helpers;
 
 public static class RequestBodyHelper
 {
+    // reads and validates JSON request body, returns (success, data, message)
     public static async Task<(bool Succeeded, T? Data, string? Message)> ReadAndValidateRequestBody<T>(HttpRequest req, ILogger logger)
     {
         var body = await new StreamReader(req.Body).ReadToEndAsync();

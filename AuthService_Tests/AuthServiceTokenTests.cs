@@ -16,7 +16,6 @@ namespace AuthService_Tests
 {
     public class AuthServiceTokenTests
     {
-        // Helpers for DRY and KISS
         private static UserAccountDto CreateTestUser(string id, string email) => new()
         {
             Id = Guid.Parse(id),
@@ -25,6 +24,7 @@ namespace AuthService_Tests
             LastName = "User"
         };
 
+        // returns given response as JSON
         private static HttpClient CreateMockHttpClient(object response)
         {
             var mockHttp = new Mock<HttpMessageHandler>();
@@ -41,6 +41,7 @@ namespace AuthService_Tests
             return new HttpClient(mockHttp.Object);
         }
 
+        // creates a mock IConfiguration with required keys
         private static Mock<IConfiguration> CreateMockConfig() {
             var mockConfig = new Mock<IConfiguration>();
             mockConfig.Setup(x => x["Providers:AccountServiceProvider"]).Returns("http://localhost");
@@ -54,16 +55,15 @@ namespace AuthService_Tests
             const string expectedToken = "test-token-123";
             const string expectedUserId = "948a7ffa-f057-413b-9fb0-a87a7e9da930";
             const string expectedEmail = "test@example.com";
+            
             var expectedUser = CreateTestUser(expectedUserId, expectedEmail);
             var accountServiceResponse = new { Data = new { User = expectedUser } };
             var httpClient = CreateMockHttpClient(accountServiceResponse);
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TokenResult {
-                    Succeeded = true,
-                    AccessToken = expectedToken,
-                    RefreshToken = "test-refresh-token"
-                });
+                .ReturnsAsync(new TokenResult {Succeeded = true, AccessToken = expectedToken, RefreshToken = "test-refresh-token" });
+            
             var functions = new AuthFunctions(Mock.Of<ILogger<AuthFunctions>>(), new Mock<IAuthService>().Object,
                 CreateMockConfig().Object,
                 httpClient,
@@ -76,7 +76,9 @@ namespace AuthService_Tests
                 FirstName = "Test",
                 LastName = "User"
             };
-            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(
+                Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            
             // Act
             var result = await functions.CompleteRegistration(context.Request);
             // Assert
@@ -94,16 +96,15 @@ namespace AuthService_Tests
             // Arrange
             const string expectedUserId = "948a7ffa-f057-413b-9fb0-a87a7e9da930";
             const string expectedEmail = "test@example.com";
+            
             var expectedUser = CreateTestUser(expectedUserId, expectedEmail);
             var accountServiceResponse = new { Data = new { User = expectedUser } };
             var httpClient = CreateMockHttpClient(accountServiceResponse);
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TokenResult {
-                    Succeeded = false,
-                    AccessToken = null,
-                    RefreshToken = null
-                });
+                .ReturnsAsync(new TokenResult {Succeeded = false, AccessToken = null, RefreshToken = null });
+            
             var functions = new AuthFunctions(
                 Mock.Of<ILogger<AuthFunctions>>(),
                 new Mock<IAuthService>().Object,
@@ -118,7 +119,9 @@ namespace AuthService_Tests
                 FirstName = "Test",
                 LastName = "User"
             };
-            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(
+                Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            
             // Act
             var result = await functions.CompleteRegistration(context.Request);
             // Assert
@@ -134,25 +137,20 @@ namespace AuthService_Tests
             var accountServiceResponse = new { Data = new { User = (UserAccountDto?)null } };
             var httpClient = CreateMockHttpClient(accountServiceResponse);
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TokenResult {
-                    Succeeded = false,
-                    AccessToken = null,
-                    RefreshToken = null
-                });
+                .ReturnsAsync(new TokenResult { Succeeded = false, AccessToken = null, RefreshToken = null });
+            
             var functions = new AuthFunctions( Mock.Of<ILogger<AuthFunctions>>(), new Mock<IAuthService>().Object,
                 CreateMockConfig().Object,
                 httpClient,
                 mockTokenService.Object
             );
-            var formDto = new CompleteRegistrationFormDto
-            {
-                Email = "test@example.com",
-                Password = "Test123!",
-                FirstName = "Test",
-                LastName = "User"
-            };
-            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            var formDto = new CompleteRegistrationFormDto { Email = "test@example.com", Password = "Test123!", FirstName = "Test", LastName = "User" };
+            
+            var context = new DefaultHttpContext { Request = { Body = new MemoryStream(
+                Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(formDto))), ContentType = "application/json" } };
+            
             // Act
             var result = await functions.CompleteRegistration(context.Request);
             // Assert
@@ -165,22 +163,22 @@ namespace AuthService_Tests
         public async Task SignInAsync_Returns_Valid_RefreshToken_When_Successful()
         {
             // Arrange
-            var expectedAccessToken = "access-token-123";
-            var expectedRefreshToken = "refresh-token-abc";
+            const string expectedAccessToken = "access-token-123";
+            const string expectedRefreshToken = "refresh-token-abc";
             var expectedUser = CreateTestUser(Guid.NewGuid().ToString(), "test@example.com");
-            var accountServiceResponse = new { Data = new { User = expectedUser } };
+            
+            var accountServiceResponse = new { data = new { user = expectedUser } };
             var httpClient = CreateMockHttpClient(accountServiceResponse);
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TokenResult {
-                    Succeeded = true,
-                    AccessToken = expectedAccessToken,
-                    RefreshToken = expectedRefreshToken
-                });
+                .ReturnsAsync(new TokenResult { Succeeded = true, AccessToken = expectedAccessToken, RefreshToken = expectedRefreshToken });
+            
             var mockLogger = new Mock<ILogger<AuthService.Api.Services.AuthService>>();
             var mockConfig = CreateMockConfig();
             var authService = new AuthService.Api.Services.AuthService(httpClient, mockConfig.Object, mockLogger.Object, mockTokenService.Object);
             var dto = new SignInFormDto { Email = "test@example.com", Password = "pw" };
+            
             // Act
             var result = await authService.SignInAsync(dto);
             // Assert
@@ -194,17 +192,16 @@ namespace AuthService_Tests
         {
             // Arrange
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TokenResult {
-                    Succeeded = false,
-                    AccessToken = null,
-                    RefreshToken = null
-                });
+                .ReturnsAsync(new TokenResult { Succeeded = false, AccessToken = null, RefreshToken = null });
+            
             var mockLogger = new Mock<ILogger<AuthService.Api.Services.AuthService>>();
             var mockConfig = CreateMockConfig();
-            var httpClient = CreateMockHttpClient(new { Data = new { User = CreateTestUser(Guid.NewGuid().ToString(), "fail@example.com") } });
+            var httpClient = CreateMockHttpClient(new { data = new { user = CreateTestUser(Guid.NewGuid().ToString(), "fail@example.com") } });
             var authService = new AuthService.Api.Services.AuthService(httpClient, mockConfig.Object, mockLogger.Object, mockTokenService.Object);
             var dto = new SignInFormDto { Email = "fail@example.com", Password = "pw" };
+            
             // Act
             var result = await authService.SignInAsync(dto);
             // Assert
@@ -217,14 +214,20 @@ namespace AuthService_Tests
         public async Task SignInAsync_Handles_Exception_From_TokenServiceClient()
         {
             // Arrange
+            var expectedUser = CreateTestUser(Guid.NewGuid().ToString(), "fail2@example.com");
+
+            var accountServiceResponse = new { data = new { user = expectedUser } };
+            var httpClient = CreateMockHttpClient(accountServiceResponse);
             var mockTokenService = new Mock<ITokenServiceClient>();
+            
             mockTokenService.Setup(x => x.RequestTokenAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .ThrowsAsync(new Exception("Handler did not return a response"));
+            
             var mockLogger = new Mock<ILogger<AuthService.Api.Services.AuthService>>();
             var mockConfig = CreateMockConfig();
-            var httpClient = CreateMockHttpClient(new { Data = new { User = CreateTestUser(Guid.NewGuid().ToString(), "fail2@example.com") } });
             var authService = new AuthService.Api.Services.AuthService(httpClient, mockConfig.Object, mockLogger.Object, mockTokenService.Object);
             var dto = new SignInFormDto { Email = "fail2@example.com", Password = "pw" };
+            
             // Act
             var result = await authService.SignInAsync(dto);
             // Assert
