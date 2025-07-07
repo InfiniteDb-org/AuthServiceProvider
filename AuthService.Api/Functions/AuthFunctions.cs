@@ -87,7 +87,7 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
     }
     
 
-    // AccountService
+    // Proxies to AccountService
     [Function("StartRegistration")]
     public async Task<IActionResult> StartRegistration(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/start-registration")] HttpRequest req)
@@ -205,7 +205,7 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
         return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
     }
 
-    // TokenService
+    // Proxies to TokenService
     [Function("GenerateToken")]
     public async Task<IActionResult> GenerateToken(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/generate-token")] HttpRequest req)

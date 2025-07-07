@@ -5,7 +5,7 @@ namespace AuthService.Api.Helpers;
 
 public static class FunctionKeyHelper
 {
-    // Helper to add x-functions-key if present, now supports explicit key
+    // builds HttpRequestMessage and adds x-functions-key header if present (for Azure Functions auth)
     public static HttpRequestMessage CreateRequestWithKey( 
         IConfiguration configuration, HttpMethod method, string url, HttpContent? content = null, string? key = null)
     {

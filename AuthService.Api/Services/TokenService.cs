@@ -22,6 +22,7 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
             var payload = JsonConvert.SerializeObject(new { userId, email, role });
             var content = new StringContent(payload, Encoding.UTF8, "application/json");
             
+            // Build request with function key for TokenService
             var request = FunctionKeyHelper.CreateRequestWithKey(
                 configuration,
                 HttpMethod.Post,
@@ -30,15 +31,18 @@ public class TokenServiceClient(HttpClient httpClient, IConfiguration configurat
                 configuration["Providers:TokenServiceProviderKey"] 
             );
 
-            foreach (var header in request.Headers)
-                logger.LogInformation($"TokenServiceClient HEADER: {header.Key} = {string.Join(",", header.Value)}");
+            // Log headers for debugging
+            /*foreach (var header in request.Headers)
+                logger.LogInformation($"TokenServiceClient HEADER: {header.Key} = {string.Join(",", header.Value)}");*/
+            
+
             var response = await httpClient.SendAsync(request);
             var responseBody = await response.Content.ReadAsStringAsync();
-            logger.LogInformation($"TokenServiceProvider response: {responseBody}");
+            /*logger.LogInformation($"TokenServiceProvider response: {responseBody}");*/
                 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogError("Token generation failed: {ErrorContent}", responseBody);
+                /*logger.LogError("Token generation failed: {ErrorContent}", responseBody);*/
                 return new TokenResult { Succeeded = false, AccessToken = null, RefreshToken = null, Message = responseBody };
             }
             

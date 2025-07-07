@@ -7,7 +7,7 @@ namespace AuthService.Api.Helpers
 {
     public static class HttpJsonHelper
     {
-        // DRY helper for POST JSON and deserialization
+        // DRY helper: posts JSON and deserializes response to T
         public static async Task<T> PostJsonAsync<T>(HttpClient httpClient, IConfiguration configuration, string url, object payload)
         {
             var json = JsonConvert.SerializeObject(payload);

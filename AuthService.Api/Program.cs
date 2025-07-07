@@ -1,4 +1,3 @@
-
 using AuthService.Api.Services;
 using AuthServiceClass = AuthService.Api.Services.AuthService;
 using Microsoft.Azure.Functions.Worker;
@@ -15,10 +14,8 @@ builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
     .ConfigureFunctionsApplicationInsights();
 
-// Register services
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ITokenServiceClient, TokenServiceClient>();
 builder.Services.AddSingleton<IAuthService, AuthServiceClass>();
-
 
 builder.Build().Run();

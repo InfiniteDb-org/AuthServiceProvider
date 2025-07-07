@@ -14,16 +14,21 @@ public static class ProxyHelper
         TokenService
     }
 
+    // proxies HTTP request to downstream service, preserves status and body
     public static async Task<IActionResult> Proxy(HttpRequest req, string url, HttpMethod method, ProxyTarget target, IConfiguration config, HttpClient httpClient, ILogger logger)
     {
         string? requestBody = null;
         if (method != HttpMethod.Get && method != HttpMethod.Delete)
+        {
             requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            logger.LogWarning("ProxyHelper: Incoming requestBody: {Body}", requestBody);
+        }
 
         HttpContent? content = null;
         if (requestBody != null)
             content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
+        // Selects correct function key
         var key = target switch
         {
             ProxyTarget.AccountService => config["Providers:AccountServiceProviderKey"],

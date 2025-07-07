@@ -8,11 +8,13 @@ namespace AuthService.Api.Helpers;
 
 public static class CompleteRegistrationHelper
 {
+    // Calls AccountService to complete registration and returns result or error
     public static async Task<(AccountServiceResult? result, string? error)> CompleteAccountRegistrationAsync(
         CompleteRegistrationFormDto formData,
         IConfiguration configuration,
         HttpClient httpClient)
     {
+        // Build request to AccountService
         var accountServiceUrl = configuration["Providers:AccountServiceProvider"];
         var accountJson = JsonConvert.SerializeObject(formData);
         var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
@@ -23,6 +25,7 @@ public static class CompleteRegistrationHelper
             accountContent,
             configuration["Providers:AccountServiceProviderKey"]
         );
+        // Send request and read response
         var response = await httpClient.SendAsync(request);
         var responseContent = await response.Content.ReadAsStringAsync();
 

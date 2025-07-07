@@ -21,6 +21,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
     private readonly ILogger<AuthService> _logger = logger;
     private readonly ITokenServiceClient _tokenServiceClient = tokenServiceClient;
 
+    // registers user, creates account via AccountService, requests tokens
     public async Task<SignUpResult> SignUpAsync(SignUpFormDto formDto)
     {
         try
@@ -48,6 +49,7 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
         }
     }
 
+    // Validates credentials, fetches user, requests tokens
     public async Task<SignInResult> SignInAsync(SignInFormDto formDto)
     {
         try
@@ -58,29 +60,22 @@ public class AuthService(HttpClient httpClient, IConfiguration configuration, IL
                 _httpClient, _configuration, $"{accountServiceUrl}/api/accounts/validate", validateRequest);
 
             // log answer for debugging
-            object asObj = accountResult;
-            _logger.LogWarning("AccountService validate response: {AccountResult}", JsonConvert.SerializeObject(asObj));
+            /*object asObj = accountResult;
+            _logger.LogWarning("AccountService validate response: {AccountResult}", JsonConvert.SerializeObject(asObj));*/
+            
             var user = accountResult.data?.user != null ? JsonConvert.DeserializeObject<UserAccountDto>(accountResult.data.user.ToString()) : null;
             var userId = user?.Id?.ToString();
+            
             if (string.IsNullOrEmpty(userId))
-            {
-                return new SignInResult
-                {
-                    Succeeded = false, Message = "userId could not be extracted", AccessToken = null, RefreshToken = null
-                };
-            }
+                return new SignInResult {Succeeded = false, Message = "userId could not be extracted", AccessToken = null, RefreshToken = null };
+            
             var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formDto.Email, user?.Role ?? "User");
+            
             if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
-            {
-                return new SignInResult
-                {
-                    Succeeded = false, Message = "Failed to sign in", AccessToken = null, RefreshToken = null
-                };
-            }
+                return new SignInResult {Succeeded = false, Message = "Failed to sign in", AccessToken = null, RefreshToken = null };
+            
             return new SignInResult
-            {
-                Succeeded = true, Message = "Login successful", User = user, AccessToken = tokenResult.AccessToken, RefreshToken = tokenResult.RefreshToken
-            };
+            { Succeeded = true, Message = "Login successful", User = user, AccessToken = tokenResult.AccessToken, RefreshToken = tokenResult.RefreshToken };
         }
         catch (Exception ex)
         {
