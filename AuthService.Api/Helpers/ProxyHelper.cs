@@ -27,16 +27,17 @@ public static class ProxyHelper
         HttpContent? content = null;
         if (requestBody != null)
             content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-        // Selects correct function key
+        
         var key = target switch
         {
             ProxyTarget.AccountService => config["Providers:AccountServiceProviderKey"],
             ProxyTarget.TokenService => config["Providers:TokenServiceProviderKey"],
-            _ => throw new ArgumentOutOfRangeException(nameof(target))
+            _ => null
         };
+        if (string.IsNullOrEmpty(key))
+            throw new InvalidOperationException($"Function key missing for {target}");
 
-        var httpRequest = FunctionKeyHelper.CreateRequestWithKey(config, method, url, content, key);
+        var httpRequest = FunctionKeyHelper.CreateRequestWithKey(method, url, content, key);
 
         try
         {
@@ -51,8 +52,8 @@ public static class ProxyHelper
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Proxy error to {url}");
-            return ActionResultHelper.BadRequest("Internal server error");
+            logger.LogError(ex, "Proxy error to {Url}", url);
+            return new BadRequestObjectResult(new { Succeeded = false, Message = "Internal server error" });
         }
     }
 }

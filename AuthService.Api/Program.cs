@@ -1,3 +1,4 @@
+using AuthService.Api.Helpers;
 using AuthService.Api.Services;
 using AuthServiceClass = AuthService.Api.Services.AuthService;
 using Microsoft.Azure.Functions.Worker;
@@ -17,5 +18,7 @@ builder.Services
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ITokenServiceClient, TokenServiceClient>();
 builder.Services.AddSingleton<IAuthService, AuthServiceClass>();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Build().Run();

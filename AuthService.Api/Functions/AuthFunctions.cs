@@ -17,208 +17,195 @@ public class AuthFunctions(ILogger<AuthFunctions> logger, IAuthService authServi
     private readonly IConfiguration _configuration = configuration;
     private readonly HttpClient _httpClient = httpClient;
     private readonly ITokenServiceClient _tokenServiceClient = tokenServiceClient;
-
     
+    private Task<IActionResult> ProxyAccount(HttpRequest req, string relativePath, HttpMethod method, ProxyHelper.ProxyTarget target = ProxyHelper.ProxyTarget.AccountService)
+    {
+        var baseUrl = _configuration[
+            target == ProxyHelper.ProxyTarget.AccountService
+                ? "Providers:AccountServiceProvider"
+                : "Providers:TokenServiceProvider"
+        ];
+        var url = $"{baseUrl}{relativePath}";
+        return ProxyHelper.Proxy(req, url, method, target, _configuration, _httpClient, _logger);
+    }
+
     [Function("SignIn")]
-    public async Task<IActionResult> SignIn(
+    public Task<IActionResult> SignIn(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/signin")] HttpRequest req)
     {
-        try
+        return FunctionErrorWrapper.Handle(async () =>
         {
             var (succeeded, formData, message) = await RequestBodyHelper.ReadAndValidateRequestBody<SignInFormDto>(req, _logger);
             if (!succeeded)
-                return ActionResultHelper.BadRequest(message); 
-
+                throw new ProblemException("INVALID_SIGNIN_DATA", 400, message);
             var result = await _authService.SignInAsync(formData!);
-            return ActionResultHelper.CreateResponse(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in SignIn function");
-            return ActionResultHelper.BadRequest("Internal server error");
-        }
+            return new OkObjectResult(result);
+        }, req.HttpContext);
     }
 
     [Function("SignOut")]
-    public async Task<IActionResult> SignOut(
+    public Task<IActionResult> SignOut(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = "auth/signout")] HttpRequest req)
     {
-        try
+        return FunctionErrorWrapper.Handle(async () =>
         {
             var authHeader = req.Headers.Authorization.ToString();
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-                return new UnauthorizedResult();
+                throw new ProblemException("INVALID_TOKEN", 401, "Authorization header is missing or invalid.");
 
             var (succeeded, data, _) = await RequestBodyHelper.ReadAndValidateRequestBody<SignOutRequest>(req, _logger);
             if (!succeeded || string.IsNullOrEmpty(data?.UserId))
-                return ActionResultHelper.BadRequest("UserId is required");
+                throw new ProblemException("INVALID_USERID", 400, "UserId is required");
 
             var result = await _authService.SignOutAsync(data.UserId);
             if (!result)
-                return ActionResultHelper.BadRequest("Sign out failed");
+                throw new ProblemException("SIGNOUT_FAILED", 400, "Sign out failed");
 
-            return ActionResultHelper.Ok(new { message = "Signed out successfully", Succeeded = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in SignOut function");
-            return ActionResultHelper.BadRequest("Internal server error");
-        }
+            return new OkObjectResult(new { message = "Signed out successfully", Succeeded = true });
+        }, req.HttpContext);
     }
-    
+
     [Function("SignUp")]
-    public async Task<IActionResult> SignUp(
+    public Task<IActionResult> SignUp(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/signup")] HttpRequest req)
     {
-        try
+        return FunctionErrorWrapper.Handle(async () =>
         {
             var (succeeded, formData, message) = await RequestBodyHelper.ReadAndValidateRequestBody<SignUpFormDto>(req, _logger);
             if (!succeeded)
-                return ActionResultHelper.BadRequest(message);
-
+                throw new ProblemException("INVALID_SIGNUP_DATA", 400, message);
             var result = await _authService.SignUpAsync(formData!);
-            return ActionResultHelper.CreateResponse(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in SignUp function");
-            return ActionResultHelper.BadRequest("Internal server error");
-        }
+            return new OkObjectResult(result);
+        }, req.HttpContext);
     }
-    
 
-    // Proxies to AccountService
+    // proxies to AccountService
     [Function("StartRegistration")]
-    public async Task<IActionResult> StartRegistration(
+    public Task<IActionResult> StartRegistration(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/start-registration")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/start-registration";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/accounts/start-registration", HttpMethod.Post), req.HttpContext);
     }
 
     [Function("ConfirmEmailCode")]
-    public async Task<IActionResult> ConfirmEmailCode(
+    public Task<IActionResult> ConfirmEmailCode(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/confirm-email-code")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/confirm-email-code";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/accounts/confirm-email-code", HttpMethod.Post), req.HttpContext);
     }
 
     [Function("CompleteRegistration")]
-    public async Task<IActionResult> CompleteRegistration(
+    public Task<IActionResult> CompleteRegistration(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/complete-registration")] HttpRequest req)
     {
-        try
+        return FunctionErrorWrapper.Handle(async () =>
         {
             var (succeeded, formData, message) = await RequestBodyHelper.ReadAndValidateRequestBody<CompleteRegistrationFormDto>(req, _logger);
             if (!succeeded)
-                return ActionResultHelper.BadRequest(message);
+                throw new ProblemException("INVALID_REGISTRATION_DATA", 400, message);
 
             var (accountResult, error) = await CompleteRegistrationHelper.CompleteAccountRegistrationAsync(formData, _configuration, _httpClient);
             if (accountResult == null)
-                return ActionResultHelper.BadRequest(error);
+                throw new ProblemException("ACCOUNT_REGISTRATION_FAILED", 400, error);
 
             var userId = accountResult.Data?.User?.Id?.ToString();
             if (string.IsNullOrEmpty(userId))
-                return ActionResultHelper.BadRequest("userId could not be extracted");
+                throw new ProblemException("USERID_EXTRACTION_FAILED", 400, "userId could not be extracted");
 
-            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formData.Email);
+            var tokenResult = await _tokenServiceClient.RequestTokenAsync(userId, formData?.Email);
             if (!tokenResult.Succeeded || string.IsNullOrEmpty(tokenResult.AccessToken))
-                return ActionResultHelper.BadRequest("Internal server error: Could not generate access token.");
+                throw new ProblemException("TOKEN_GENERATION_FAILED", 500, "Internal server error: Could not generate access token.");
 
-            return ActionResultHelper.Ok(new { 
-                succeeded = true, 
-                message = "Registration complete.", 
-                accessToken = tokenResult.AccessToken, 
-                refreshToken = tokenResult.RefreshToken, 
-                user = accountResult.Data?.User 
+            return new OkObjectResult(new {
+                succeeded = true,
+                message = "Registration complete.",
+                accessToken = tokenResult.AccessToken,
+                refreshToken = tokenResult.RefreshToken,
+                user = accountResult.Data?.User
             });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in CompleteRegistration function");
-            return ActionResultHelper.BadRequest("Internal server error");
-        }
+        }, req.HttpContext);
     }
-    
+
     [Function("GetAccountById")]
-    public async Task<IActionResult> GetAccountById(
+    public Task<IActionResult> GetAccountById(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auth/account/{userId}")] HttpRequest req, string userId)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/{userId}";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Get, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, $"/api/accounts/{userId}", HttpMethod.Get), req.HttpContext);
     }
 
     [Function("GetAccountByEmail")]
-    public async Task<IActionResult> GetAccountByEmail(
+    public Task<IActionResult> GetAccountByEmail(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auth/account/by-email/{email}")] HttpRequest req, string email)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/by-email/{email}";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Get, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, $"/api/accounts/by-email/{email}", HttpMethod.Get), req.HttpContext);
     }
 
     [Function("GenerateNewEmailConfirmationToken")]
-    public async Task<IActionResult> GenerateNewEmailConfirmationToken(
+    public Task<IActionResult> GenerateNewEmailConfirmationToken(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/account/{userId}/email-confirmation-token")] HttpRequest req, string userId)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/{userId}/email-confirmation-token";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, $"/api/accounts/{userId}/email-confirmation-token", HttpMethod.Post), req.HttpContext);
     }
 
     [Function("ValidateCredentials")]
-    public async Task<IActionResult> ValidateCredentials(
+    public Task<IActionResult> ValidateCredentials(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/validate-credentials")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/validate-credentials";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/accounts/validate-credentials", HttpMethod.Post), req.HttpContext);
     }
 
     [Function("UpdateUser")]
-    public async Task<IActionResult> UpdateUser(
+    public Task<IActionResult> UpdateUser(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auth/account/{userId}")] HttpRequest req, string userId)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/{userId}";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Put, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, $"/api/accounts/{userId}", HttpMethod.Put), req.HttpContext);
     }
 
     [Function("DeleteAccount")]
-    public async Task<IActionResult> DeleteAccount(
+    public Task<IActionResult> DeleteAccount(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auth/account/{userId}")] HttpRequest req, string userId)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/{userId}";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Delete, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, $"/api/accounts/{userId}", HttpMethod.Delete), req.HttpContext);
     }
 
     [Function("ForgotPassword")]
-    public async Task<IActionResult> ForgotPassword(
+    public Task<IActionResult> ForgotPassword(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/forgot-password")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/forgot-password";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/accounts/forgot-password", HttpMethod.Post), req.HttpContext);
     }
 
     [Function("ResetPassword")]
-    public async Task<IActionResult> ResetPassword(
+    public Task<IActionResult> ResetPassword(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/reset-password")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:AccountServiceProvider"]}/api/accounts/reset-password";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.AccountService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/accounts/reset-password", HttpMethod.Post), req.HttpContext);
     }
 
     // Proxies to TokenService
     [Function("GenerateToken")]
-    public async Task<IActionResult> GenerateToken(
+    public Task<IActionResult> GenerateToken(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/generate-token")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:TokenServiceProvider"]}/api/generate-token";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.TokenService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/generate-token", HttpMethod.Post, ProxyHelper.ProxyTarget.TokenService), req.HttpContext);
     }
 
     [Function("ValidateToken")]
-    public async Task<IActionResult> ValidateToken(
+    public Task<IActionResult> ValidateToken(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/validate-token")] HttpRequest req)
     {
-        var url = $"{_configuration["Providers:TokenServiceProvider"]}/api/validate-token";
-        return await ProxyHelper.Proxy(req, url, HttpMethod.Post, ProxyHelper.ProxyTarget.TokenService, _configuration, _httpClient, _logger);
+        return FunctionErrorWrapper.Handle(
+            () => ProxyAccount(req, "/api/validate-token", HttpMethod.Post, ProxyHelper.ProxyTarget.TokenService), req.HttpContext);
     }
 }

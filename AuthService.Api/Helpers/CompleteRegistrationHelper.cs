@@ -10,20 +10,22 @@ public static class CompleteRegistrationHelper
 {
     // Calls AccountService to complete registration and returns result or error
     public static async Task<(AccountServiceResult? result, string? error)> CompleteAccountRegistrationAsync(
-        CompleteRegistrationFormDto formData,
+        CompleteRegistrationFormDto? formData,
         IConfiguration configuration,
         HttpClient httpClient)
     {
         // Build request to AccountService
         var accountServiceUrl = configuration["Providers:AccountServiceProvider"];
+        var key = configuration["Providers:AccountServiceProviderKey"];
+        if (string.IsNullOrEmpty(key))
+            throw new InvalidOperationException("AccountServiceProviderKey is missing in configuration");
         var accountJson = JsonConvert.SerializeObject(formData);
         var accountContent = new StringContent(accountJson, Encoding.UTF8, "application/json");
         var request = FunctionKeyHelper.CreateRequestWithKey(
-            configuration,
             HttpMethod.Post,
             $"{accountServiceUrl}/api/accounts/complete-registration",
             accountContent,
-            configuration["Providers:AccountServiceProviderKey"]
+            key
         );
         // Send request and read response
         var response = await httpClient.SendAsync(request);

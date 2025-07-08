@@ -1,3 +1,7 @@
 .idea
 /AuthService_Tests/bin/
 /AuthService_Tests/obj/
+AuthService_Tests/AuthFunctionsTests.cs
+AuthService_Tests/AuthServiceIntegrationTests.cs
+AuthService_Tests/AuthServiceTests.cs
+AuthService_Tests/CompleteRegistrationHelperTests.cs
